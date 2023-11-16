@@ -2,6 +2,23 @@ import argparse
 
 from flag_dres_model import FlagDRESModel
 from mteb import MTEB
+from mteb.abstasks import AbsTaskRetrieval
+from mteb.abstasks import BeIRTask
+
+class CustomRetrieval(AbsTaskRetrieval, BeIRTask):
+    @property
+    def description(self):
+        return {
+            "name": "CustomRetrieval",
+            "beir_name": "custom_desk_eval",
+            "description": "",
+            "reference": "",
+            "type": "Retrieval",
+            "category": "s2p",
+            "eval_splits": ["test"],
+            "eval_langs": ["en"],
+            "main_score": "ndcg_at_10",
+        }
 
 query_instruction_for_retrieval_dict = {
     "BAAI/bge-large-en": "Represent this sentence for searching relevant passages: ",
@@ -25,38 +42,48 @@ def get_args():
 
 if __name__ == '__main__':
     args = get_args()
-
     model = FlagDRESModel(model_name_or_path=args.model_name_or_path,
-                          normalize_embeddings=False,  # normlize embedding will harm the performance of classification task
-                          query_instruction_for_retrieval="Represent this sentence for searching relevant passages: ",
-                          pooling_method=args.pooling_method)
-
-    task_names = [t.description["name"] for t in MTEB(task_types=args.task_type,
-                                                      task_langs=['en']).tasks]
-
-    for task in task_names:
-        if task in ['MSMARCOv2']:
-            print('Skip task: {}, since it has no test split'.format(task))
-            continue
-
-        if 'CQADupstack' in task or task in ['Touche2020', 'SciFact', 'TRECCOVID', 'NQ',
-                                             'NFCorpus', 'MSMARCO', 'HotpotQA', 'FiQA2018',
-                                             'FEVER', 'DBPedia', 'ClimateFEVER', 'SCIDOCS', ]:
-            if args.model_name_or_path not in query_instruction_for_retrieval_dict:
-                if args.add_instruction:
-                    instruction = "Represent this sentence for searching relevant passages: "
-                else:
-                    instruction = None
-                print(f"{args.model_name_or_path} not in query_instruction_for_retrieval_dict, set instruction={instruction}")
-            else:
-                instruction = query_instruction_for_retrieval_dict[args.model_name_or_path]
-        else:
-            instruction = None
-
+                        normalize_embeddings=False,  # normlize embedding will harm the performance of classification task
+                        query_instruction_for_retrieval="Represent this sentence for searching relevant passages: ",
+                        pooling_method=args.pooling_method)
+    if True:
+        
+        instruction = "Represent this sentence for searching relevant passages: "
         model.query_instruction_for_retrieval = instruction
+        customRetrievalTask = CustomRetrieval()
+        evaluation = MTEB(tasks=[customRetrievalTask], task_langs=['en'], eval_splits = ["test"])
+        evaluation.run(model, output_folder=f"/data/ashok-4983/FlagEmbedding/new_results_dup/{args.model_name_or_path.split('/')[-1]}")
+    
+    else:
 
-        evaluation = MTEB(tasks=[task], task_langs=['en'], eval_splits = ["test" if task not in ['MSMARCO'] else 'dev'])
-        evaluation.run(model, output_folder=f"en_results/{args.model_name_or_path.split('/')[-1]}")
+    # task_names = [t.description["name"] for t in MTEB(task_types=args.task_type,
+    #                                                   task_langs=['en']).tasks]
+        # task_names = ["ArguAna", 'Touche2020', 'SciFact', 'NFCorpus', 'HotpotQA', 'FiQA2018',
+        #                                         'FEVER', 'DBPedia', 'ClimateFEVER', 'SCIDOCS', ]
+        task_names = ["SciFact"]
+        for task in task_names:
+            if task in ['MSMARCOv2']:
+                print('Skip task: {}, since it has no test split'.format(task))
+                continue
+
+            if 'CQADupstack' in task or task in ['Touche2020', 'SciFact', 'TRECCOVID', 'NQ',
+                                                'NFCorpus', 'MSMARCO', 'HotpotQA', 'FiQA2018',
+                                                'FEVER', 'DBPedia', 'ClimateFEVER', 'SCIDOCS', ]:
+                if args.model_name_or_path not in query_instruction_for_retrieval_dict:
+                    if args.add_instruction:
+                        instruction = "Represent this sentence for searching relevant passages: "
+                    else:
+                        instruction = None
+                    print(f"{args.model_name_or_path} not in query_instruction_for_retrieval_dict, set instruction={instruction}")
+                else:
+                    instruction = query_instruction_for_retrieval_dict[args.model_name_or_path]
+            else:
+                instruction = None
+
+            model.query_instruction_for_retrieval = instruction
+
+            evaluation = MTEB(tasks=[task], task_langs=['en'], eval_splits = ["test" if task not in ['MSMARCO'] else 'dev'])
+            evaluation.run(model, output_folder=f"/data/ashok-4983/FlagEmbedding/new_v1.5_results/{args.model_name_or_path.split('/')[-1]}")
 
 
 
